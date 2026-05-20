@@ -1,7 +1,15 @@
-let plants = [];
+// -------------------- Local Storage --------------------
+
+// Load saved plants from browser storage
+let plants = JSON.parse(localStorage.getItem("plants")) || [];
 
 const form = document.getElementById("plantForm");
 const list = document.getElementById("plantList");
+
+// Save data
+function savePlants() {
+  localStorage.setItem("plants", JSON.stringify(plants));
+}
 
 // -------------------- Helpers --------------------
 
@@ -26,7 +34,6 @@ function getStatus(plant) {
       label: "Overdue",
       subtext: `${Math.abs(remaining)} day(s) overdue`,
       color: "danger",
-      className: "status-danger",
       remaining,
       needsWater: true
     };
@@ -37,7 +44,6 @@ function getStatus(plant) {
       label: "Due Soon",
       subtext: `${remaining} day(s) left`,
       color: "warning",
-      className: "status-warning",
       remaining,
       needsWater: true
     };
@@ -47,7 +53,6 @@ function getStatus(plant) {
     label: "Healthy",
     subtext: `${remaining} day(s) left`,
     color: "success",
-    className: "status-healthy",
     remaining,
     needsWater: false
   };
@@ -84,7 +89,14 @@ function addFromDropdown() {
 }
 
 function addPlant(name, frequency, lastWatered) {
-  plants.push({ name, frequency, lastWatered });
+  plants.push({
+    name,
+    frequency,
+    lastWatered,
+    history: [lastWatered]
+  });
+
+  savePlants();
   render();
 }
 
@@ -95,7 +107,7 @@ function render() {
 
   if (plants.length === 0) {
     list.innerHTML = `
-      <div class="col-12 text-center text-muted empty-state">
+      <div class="col-12 text-center text-muted">
         <i class="bi bi-droplets" style="font-size:4rem;"></i>
         <h4 class="mt-3">No plants yet</h4>
         <p>Add your first plant above 🌱</p>
@@ -108,23 +120,33 @@ function render() {
 
   plants.forEach((plant, index) => {
     const status = getStatus(plant);
+
     const nextDate = getNextWateringDate(
       plant.lastWatered,
       plant.frequency
     );
+
+    const historyHTML = plant.history
+      .slice()
+      .reverse()
+      .map(date => `
+        <li>${new Date(date).toLocaleDateString()}</li>
+      `)
+      .join("");
 
     const card = document.createElement("div");
     card.className = "col";
 
     card.innerHTML = `
       <div class="card plant-card shadow-sm h-100">
-        
+
         <div class="card-body p-4">
 
           <div class="d-flex justify-content-between align-items-start mb-3">
+
             <div>
-              <div class="plant-icon mb-2">
-                <i class="bi bi-flower1"></i>
+              <div class="mb-2">
+                <i class="bi bi-flower1 text-success"></i>
               </div>
 
               <h4 class="fw-bold mb-1">${plant.name}</h4>
@@ -134,17 +156,17 @@ function render() {
               </div>
             </div>
 
-            <span class="badge bg-${status.color} px-3 py-2">
+            <span class="badge bg-${status.color}">
               ${status.label}
             </span>
           </div>
 
-          <div class="status-box ${status.className}">
+          <div class="mb-3">
             <div class="fw-semibold">
               ${status.subtext}
             </div>
 
-            <div class="text-muted next-date">
+            <div class="text-muted small">
               Next watering:
               ${nextDate.toLocaleDateString(undefined, {
                 weekday: "short",
@@ -154,6 +176,17 @@ function render() {
             </div>
           </div>
 
+          <hr>
+
+          <h6 class="fw-bold">
+            <i class="bi bi-clock-history"></i>
+            Watering History
+          </h6>
+
+          <ul class="small text-muted ps-3 mb-0">
+            ${historyHTML}
+          </ul>
+
         </div>
 
         <div class="card-footer border-0 px-4 pb-4">
@@ -161,25 +194,31 @@ function render() {
           ${
             status.needsWater
               ? `
-            <button
-              class="btn btn-success btn-water w-100"
-              onclick="waterPlant(${index})"
-            >
-              <i class="bi bi-droplet-fill"></i>
-              Mark as Watered
-            </button>
-          `
+              <button
+                class="btn btn-success w-100"
+                onclick="waterPlant(${index})"
+              >
+                <i class="bi bi-droplet-fill"></i>
+                Mark as Watered
+              </button>
+            `
               : `
-            <button
-              class="btn btn-outline-success btn-water w-100"
-              disabled
-            >
-              <i class="bi bi-check-circle"></i>
-              All Good
-            </button>
-          `
+              <button
+                class="btn btn-outline-success w-100"
+                disabled
+              >
+                <i class="bi bi-check-circle"></i>
+                All Good
+              </button>
+            `
           }
-
+          <button
+          class="btn btn-outline-danger"
+          onclick="deletePlant(${index})"
+        >
+          <i class="bi bi-trash"></i>
+          Delete Plant
+        </button>
         </div>
 
       </div>
@@ -192,10 +231,30 @@ function render() {
 // -------------------- Water Plant --------------------
 
 window.waterPlant = function(index) {
-  plants[index].lastWatered =
-    new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0];
 
+  plants[index].lastWatered = today;
+
+  // Add to history
+  plants[index].history.push(today);
+
+  savePlants();
   render();
+};
+// -------------------- Delete Plant --------------------
+
+window.deletePlant = function(index) {
+
+  const confirmDelete = confirm(
+    `Delete ${plants[index].name}?`
+  );
+
+  if (confirmDelete) {
+    plants.splice(index, 1);
+
+    savePlants();
+    render();
+  }
 };
 
 // -------------------- Initial Render --------------------
